@@ -1,0 +1,14 @@
+{
+  "name": "my-plugins",
+  "owner": {
+    "name": "henrique-X",
+    "url": "https://github.com/henrique-X"
+  },
+  "plugins": [
+    {
+      "name": "worktools",
+      "source": "./plugins/worktools",
+      "description": "工作流技能包：代码审查、日报生成、GitLab MR 管理、知识保存"
+    }
+  ]
+}

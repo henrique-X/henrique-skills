@@ -1,0 +1,27 @@
+# Claude Code Plugin Marketplace
+
+个人 Claude Code 技能插件仓库。
+
+## 插件列表
+
+### worktools - 工作流技能包
+
+包含以下技能：
+
+- **code-review** - 前端代码审查
+- **daily-report** - 每日工作日报生成
+- **knowledge-save** - 知识点保存到知识库
+- **gitlab-review-mr** - GitLab Merge Request 代码审查与合并
+- **gitlab-create-mr** - GitLab Merge Request 创建
+
+## 安装
+
+在 Claude Code 中添加此 marketplace：
+
+```bash
+/plugins add --marketplace https://github.com/henrique-X/henrique-skills
+```
+
+## 作者
+
+henrique
