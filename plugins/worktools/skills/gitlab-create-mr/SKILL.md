@@ -52,12 +52,19 @@ MR 类型根据 commit message 前缀自动勾选：
 
 ## 使用方法
 
+**重要**：本 skill 以插件形式安装，脚本路径随版本变化。执行前必须先用 Glob 定位脚本：
+
+```
+Glob: **/worktools/*/skills/gitlab-create-mr/scripts/create_mr.cjs
+```
+在 `~/.claude/plugins/cache/` 目录下搜索，找到实际路径后执行。
+
 ### 基本用法（推荐）
 
 在 git 仓库目录中：
 
 ```bash
-node "C:\Users\Admin\.claude\skills\gitlab-create-mr\scripts\create_mr.cjs"
+node "<通过 Glob 找到的实际路径>"
 ```
 
 脚本会自动：
@@ -74,24 +81,24 @@ node "C:\Users\Admin\.claude\skills\gitlab-create-mr\scripts\create_mr.cjs"
 
 ```bash
 # 指定源分支和目标分支
-node "C:\Users\Admin\.claude\skills\gitlab-create-mr\scripts\create_mr.cjs" \
+node "<通过 Glob 找到的实际路径>" \
   --source "feature/new-function" \
   --target "develop"
 
 # 指定标题
-node "C:\Users\Admin\.claude\skills\gitlab-create-mr\scripts\create_mr.cjs" \
+node "<通过 Glob 找到的实际路径>" \
   --title "Custom MR Title"
 
 # 指定项目路径
-node "C:\Users\Admin\.claude\skills\gitlab-create-mr\scripts\create_mr.cjs" \
+node "<通过 Glob 找到的实际路径>" \
   --project "group/project"
 
 # 指定 Assignee
-node "C:\Users\Admin\.claude\skills\gitlab-create-mr\scripts\create_mr.cjs" \
+node "<通过 Glob 找到的实际路径>" \
   --assignee "username"
 
 # 指定 Reviewer（支持多个，用逗号分隔）
-node "C:\Users\Admin\.claude\skills\gitlab-create-mr\scripts\create_mr.cjs" \
+node "<通过 Glob 找到的实际路径>" \
   --reviewer "reviewer1,reviewer2"
 ```
 
