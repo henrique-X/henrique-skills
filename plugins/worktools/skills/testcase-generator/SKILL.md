@@ -1,9 +1,9 @@
 ---
-name: git-commit-testcase-generator
+name: testcase-generator
 description: 根据 git commit message 关键字查找提交记录，分析代码变更及其调用链上下文，生成测试分析报告。当用户说"分析git提交"、"查看TG-xxx的改动"、"分析TG-xxxx的提交"、"帮我列出测试内容"、"生成测试用例"、"生成test case"、"根据关键字生成测试" 或提供 git commit message 关键字请求分析测试内容时使用此 skill。回复语言始终使用中文。
 ---
 
-# Git Commit Testcase Generator
+# Testcase Generator
 
 根据 git commit message 关键字，查找相关提交，分析代码变更及其调用链上下文，生成结构化测试用例。
 
