@@ -12,7 +12,8 @@
 - **daily-report** - 每日工作日报生成
 - **knowledge-save** - 知识点保存到知识库
 - **gitlab-review-mr** - GitLab Merge Request 代码审查与合并
-- **gitlab-create-mr** - GitLab Merge Request 创建
+- **gitlab-create-mr** - GitLab Merge Request 创建（支持 `--with-test` 附带测试报告）
+- **testcase-generator** - 根据 git commit 关键字生成测试分析报告
 
 ## 安装
 

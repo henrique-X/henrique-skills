@@ -1,6 +1,6 @@
 ---
 name: gitlab-create-mr
-description: GitLab Merge Request 自动创建工具。当用户说 "创建 MR"、"create MR"、"新建 merge request"、"push mr" 或类似触发词时，自动识别当前项目的远程仓库，根据分支名称推断目标分支并创建 MR。支持路径规则分支命名（如 hangxuan/console_TG-8201/SZ_dev 合并到 SZ_dev），根据 commit message 前缀自动勾选 MR 类型（fix→Bug Fix, feat→Feature）。
+description: GitLab Merge Request 自动创建工具。当用户说 "创建 MR"、"create MR"、"新建 merge request"、"push mr" 或类似触发词时，自动识别当前项目的远程仓库，根据分支名称推断目标分支并创建 MR。支持路径规则分支命名（如 hangxuan/console_TG-8201/SZ_dev 合并到 SZ_dev），根据 commit message 前缀自动勾选 MR 类型（fix→Bug Fix, feat→Feature）。支持 --with-test 参数，在创建 MR 前生成测试分析报告并上传到 GitLab。
 
 **重要**: 创建 MR 时不要添加 labels，不要在 description 中包含文件修改行数统计。
 ---
@@ -101,6 +101,66 @@ node "<通过 Glob 找到的实际路径>" \
 node "<通过 Glob 找到的实际路径>" \
   --reviewer "reviewer1,reviewer2"
 ```
+
+### 附带测试报告（推荐）
+
+```bash
+node "<通过 Glob 找到的实际路径>" --with-test
+```
+
+使用 `--with-test` 时，脚本会：
+1. 在创建 MR 前，上传 `--test-report` 指定的测试报告到 GitLab
+2. 将测试报告链接追加到 MR description 的 `## Test Report` 章节
+
+```bash
+# 手动指定测试报告路径
+node "<通过 Glob 找到的实际路径>" \
+  --with-test \
+  --test-report "D:\Workspace\kaizen\test-case\projectName\TG-1234.md"
+```
+
+## 带 --with-test 的完整工作流
+
+当用户使用 `--with-test` 参数时，需要先生成测试报告再创建 MR。执行顺序：
+
+### 第一步：提取关键字
+
+从当前分支名提取 `TG-XXX` 编号（如 `hangxuan/console_TG-9537/SZ_dev` → `TG-9537`）。
+
+### 第二步：生成测试报告
+
+按照 testcase-generator 的分析流程，对 TG-XXX 相关的提交进行分析并生成测试报告。
+
+具体步骤：
+1. `git log --all --oneline --no-merges --grep="<TG-XXX>"` 查找提交记录
+2. `git show <hash> --stat` 查看变更范围
+3. `git diff <hash>^..<hash>` 查看具体 diff
+4. 追踪调用链上下文（关键标识符的上下游）
+5. 按核心功能、边界异常、回归影响三个维度生成测试内容
+6. 输出 Markdown 格式报告
+
+详细流程参见 testcase-generator 的 SKILL.md。
+
+### 第三步：保存报告
+
+将生成的测试报告保存到本地：
+```
+D:\Workspace\kaizen\test-case\${projectName}\${TG-XXX}.md
+```
+- `projectName`：从 git remote URL 解析，取最后两级路径（如 `group/project`）
+- 如果目录不存在，自动创建
+
+### 第四步：创建 MR 并上传报告
+
+执行 `create_mr.cjs`，传入测试报告路径：
+```bash
+node "<path>/create_mr.cjs" --with-test --test-report "D:\Workspace\kaizen\test-case\${projectName}\${TG-XXX}.md"
+```
+
+脚本会自动：
+1. 上传测试报告到 GitLab
+2. 将报告链接追加到 MR description
+3. 创建 MR
 
 ## MR Description 模板
 

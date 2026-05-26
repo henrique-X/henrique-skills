@@ -15,6 +15,8 @@
  *   --project <path> - 项目路径 (如: group/project)
  *   --assignee <username> - Assignee 用户名 (覆盖环境变量)
  *   --reviewer <username> - Reviewer 用户名 (覆盖环境变量，多个用逗号分隔)
+ *   --with-test - 上传测试报告并附加到 MR description
+ *   --test-report <path> - 测试报告文件路径 (.md)
  *
  * 输出格式: JSON
  */
@@ -22,6 +24,8 @@
 const { execSync } = require('child_process');
 const http = require('http');
 const https = require('https');
+const fs = require('fs');
+const path = require('path');
 
 let GITLAB_URL = process.env.GITLAB_URL;
 const GITLAB_TOKEN = process.env.GITLAB_TOKEN;
@@ -307,6 +311,66 @@ function extractGitLabUrlFromRemote(gitUrl) {
   }
 }
 
+// 上传文件到 GitLab 项目
+function uploadFile(projectPath, filePath) {
+  return new Promise((resolve, reject) => {
+    const { hostname, port, basePath } = parseGitLabUrl(GITLAB_URL);
+    const encodedPath = urlEncode(projectPath);
+    const fullPath = (basePath + `/api/v4/projects/${encodedPath}/uploads`).replace(/\/+/g, '/');
+    const protocol = getHttpProtocol(GITLAB_URL);
+
+    const fileName = path.basename(filePath);
+    const fileContent = fs.readFileSync(filePath);
+    const boundary = '----FormBoundary' + Math.random().toString(36).slice(2);
+
+    const bodyStart = [
+      `--${boundary}\r\n`,
+      `Content-Disposition: form-data; name="file"; filename="${fileName}"\r\n`,
+      `Content-Type: text/markdown\r\n\r\n`
+    ].join('');
+
+    const bodyEnd = `\r\n--${boundary}--\r\n`;
+
+    const bodyStartBuffer = Buffer.from(bodyStart, 'utf-8');
+    const bodyEndBuffer = Buffer.from(bodyEnd, 'utf-8');
+    const totalLength = bodyStartBuffer.length + fileContent.length + bodyEndBuffer.length;
+
+    const options = {
+      hostname,
+      port,
+      path: fullPath,
+      method: 'POST',
+      headers: {
+        'PRIVATE-TOKEN': GITLAB_TOKEN,
+        'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        'Content-Length': totalLength
+      }
+    };
+
+    const req = protocol.request(options, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          try {
+            resolve(JSON.parse(data));
+          } catch {
+            reject(new Error(`Failed to parse upload response: ${data}`));
+          }
+        } else {
+          reject(new Error(`HTTP ${res.statusCode}: ${data}`));
+        }
+      });
+    });
+
+    req.on('error', reject);
+    req.write(bodyStartBuffer);
+    req.write(fileContent);
+    req.write(bodyEndBuffer);
+    req.end();
+  });
+}
+
 async function main() {
   const args = process.argv.slice(2);
   let sourceBranch = null;
@@ -315,6 +379,8 @@ async function main() {
   let projectPath = null;
   let assigneeOverride = null;
   let reviewerOverride = null;
+  let withTest = false;
+  let testReportPath = null;
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--source' && args[i + 1]) {
@@ -329,6 +395,10 @@ async function main() {
       assigneeOverride = args[i + 1]; i++;
     } else if (args[i] === '--reviewer' && args[i + 1]) {
       reviewerOverride = args[i + 1]; i++;
+    } else if (args[i] === '--with-test') {
+      withTest = true;
+    } else if (args[i] === '--test-report' && args[i + 1]) {
+      testReportPath = args[i + 1]; i++;
     }
   }
 
@@ -403,9 +473,24 @@ async function main() {
     const description = generateMRDescription(commitSummary, tgNumber, changeType);
 
     // 创建 MR
-    const result = await createMR(projectPath, sourceBranch, targetBranch, title, description, assigneeId, reviewerIds);
+    let finalDescription = description;
+    let testReportUrl = null;
 
-    console.log(JSON.stringify({
+    // 如果指定了 --with-test 且有测试报告文件，先上传再创建 MR
+    if (withTest && testReportPath) {
+      if (!fs.existsSync(testReportPath)) {
+        throw new Error(`Test report file not found: ${testReportPath}`);
+      }
+      // 先上传测试报告
+      const uploadResult = await uploadFile(projectPath, testReportPath);
+      testReportUrl = uploadResult.markdown;
+      // 在 description 中追加测试报告链接
+      finalDescription = description + '\n\n## Test Report\n' + testReportUrl;
+    }
+
+    const result = await createMR(projectPath, sourceBranch, targetBranch, title, finalDescription, assigneeId, reviewerIds);
+
+    const output = {
       success: true,
       message: 'Merge request created successfully',
       mr: {
@@ -415,7 +500,16 @@ async function main() {
         target_branch: targetBranch,
         title: title
       }
-    }, null, 2));
+    };
+
+    if (testReportUrl) {
+      output.test_report = {
+        uploaded: true,
+        markdown: testReportUrl
+      };
+    }
+
+    console.log(JSON.stringify(output, null, 2));
 
   } catch (error) {
     console.error(JSON.stringify({

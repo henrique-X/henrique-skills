@@ -8,7 +8,7 @@
     {
       "name": "worktools",
       "source": "./plugins/worktools",
-      "description": "工作流技能包：代码审查、日报生成、GitLab MR 管理、知识保存、Git 提交测试分析"
+      "description": "工作流技能包：代码审查、日报生成、GitLab MR 管理、知识保存、测试用例生成"
     }
   ]
 }
