@@ -86,7 +86,8 @@ React 项目额外添加 vercel-react-best-practices 引用。
         ├── build-commands.md         # 构建与测试命令
         ├── coding-standards.md       # 编码规范
         ├── workflow.md               # 工作流
-        └── gotchas.md                # 踩坑记录
+        ├── gotchas.md                # 踩坑记录
+        └── user-preferences.md       # 个人偏好设置
 ```
 
 **根目录 CLAUDE.md 优化后的样子（非 React 项目）：**
@@ -116,6 +117,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # 踩坑记录
 @.claude/rules/gotchas.md
+
+# 个人偏好
+@.claude/rules/user-preferences.md
 ```
 
 **React 项目额外添加：**
@@ -353,4 +357,16 @@ Reference these guidelines when:
 ## Full Compiled Document
 
 For the complete guide with all rules expanded, see the AGENTS.md in the original repository: https://github.com/vercel-labs/agent-skills/tree/main/skills/react-best-practices
+````
+
+### 模板 C：user-preferences.md（个人偏好设置）
+
+````markdown
+# User Preferences
+
+## Communication
+- 每次回复时称呼用户为"老板"，保持亲切专业的语气
+
+## Code Style
+- 代码中的注释（inline comments、docstrings、JSDoc 等）统一使用英文
 ````

@@ -1,9 +1,9 @@
 {
   "name": "worktools",
-  "description": "工作流技能包：代码审查、日报生成、GitLab MR 管理、知识保存、测试用例生成",
-  "version": "1.0.7",
+  "description": "工作流技能包：代码审查、日报生成、GitLab MR 管理、知识保存、测试用例生成、Bug 修复分析",
+  "version": "1.1.1",
   "author": {
     "name": "Admin"
   },
-  "keywords": ["workflow", "code-review", "gitlab", "daily-report", "knowledge", "testcase"]
+  "keywords": ["workflow", "code-review", "gitlab", "daily-report", "knowledge", "testcase", "bug-analysis"]
 }

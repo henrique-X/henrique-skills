@@ -15,8 +15,14 @@
  *   --project <path> - 项目路径 (如: group/project)
  *   --assignee <username> - Assignee 用户名 (覆盖环境变量)
  *   --reviewer <username> - Reviewer 用户名 (覆盖环境变量，多个用逗号分隔)
- *   --with-test - 上传测试报告并附加到 MR description
+ *   --with-test - 上传测试报告并自动生成修改报告，均附加到 MR description
  *   --test-report <path> - 测试报告文件路径 (.md)
+ *   --upload-target <gitlab|taiga> - 上传目标 (默认: taiga)
+ *
+ * Taiga 环境变量 (upload-target=taiga 时必需):
+ *   TAIGA_URL - Taiga 实例 URL (如: https://taiga.example.com)
+ *   TAIGA_TOKEN - Taiga API Token
+ *   TAIGA_PROJECT_SLUG - Taiga 项目 slug (默认: tecq-agp)
  *
  * 输出格式: JSON
  */
@@ -31,6 +37,9 @@ let GITLAB_URL = process.env.GITLAB_URL;
 const GITLAB_TOKEN = process.env.GITLAB_TOKEN;
 const GITLAB_ASSIGNEE = process.env.GITLAB_ASSIGNEE || '';
 const GITLAB_REVIEWER = process.env.GITLAB_REVIEWER || 'Huiming';
+const TAIGA_URL = process.env.TAIGA_URL;
+const TAIGA_TOKEN = process.env.TAIGA_TOKEN;
+const TAIGA_PROJECT_SLUG = process.env.TAIGA_PROJECT_SLUG || 'tecq-agp';
 
 function getHttpProtocol(url) {
   return url.startsWith('https://') ? https : http;
@@ -242,7 +251,9 @@ function generateMRDescription(commitSummary, tgNumber, changeType) {
     const issueNum = tgNumber.replace('TG-', '');
     const prefix = isBugOrRefactor ? 'Fixes' : 'Part of';
     const urlType = isBugOrRefactor ? 'issue' : 'task';
-    taigaLink = `${prefix} [${tgNumber}](https://taiga.ecquaria.org/project/tecq-agp/${urlType}/${issueNum})`;
+    const taigaBase = TAIGA_URL || 'https://taiga.ecquaria.org';
+    const taigaSlug = TAIGA_PROJECT_SLUG || 'tecq-agp';
+    taigaLink = `${prefix} [${tgNumber}](${taigaBase}/project/${taigaSlug}/${urlType}/${issueNum})`;
   }
 
   return `## Description of Changes
@@ -371,6 +382,182 @@ function uploadFile(projectPath, filePath) {
   });
 }
 
+// Taiga API request helper
+function taigaRequest(apiPath, method, data) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(TAIGA_URL);
+    const protocol = url.protocol === 'https:' ? https : http;
+    const options = {
+      hostname: url.hostname,
+      port: url.port || (url.protocol === 'https:' ? 443 : 80),
+      path: apiPath,
+      method: method,
+      headers: {
+        'Authorization': `Bearer ${TAIGA_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    };
+    const req = protocol.request(options, (res) => {
+      let responseData = '';
+      res.on('data', chunk => responseData += chunk);
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          try { resolve(JSON.parse(responseData)); } catch { resolve(responseData); }
+        } else {
+          reject(new Error(`Taiga HTTP ${res.statusCode}: ${responseData}`));
+        }
+      });
+    });
+    req.on('error', reject);
+    if (data) req.write(JSON.stringify(data));
+    req.end();
+  });
+}
+
+// Get Taiga project ID from slug
+async function getTaigaProjectId(slug) {
+  const result = await taigaRequest(`/api/v1/projects/by_slug?slug=${slug}`, 'GET');
+  return result.id;
+}
+
+// Get Taiga issue/task ID by ref number
+async function getTaigaObjectId(projectId, ref, objectType) {
+  const endpoint = objectType === 'issue' ? 'issues' : 'tasks';
+  const result = await taigaRequest(`/api/v1/${endpoint}?project=${projectId}&ref=${ref}`, 'GET');
+  if (result && result.length > 0) return result[0].id;
+  return null;
+}
+
+// Upload file attachment to Taiga
+function uploadToTaiga(projectId, objectId, objectType, filePath) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(TAIGA_URL);
+    const protocol = url.protocol === 'https:' ? https : http;
+    const fileName = path.basename(filePath);
+    const fileContent = fs.readFileSync(filePath);
+    const boundary = '----FormBoundary' + Math.random().toString(36).slice(2);
+
+    const textFields = [
+      { name: 'project', value: String(projectId) },
+      { name: 'object_id', value: String(objectId) },
+      { name: 'object_type', value: objectType }
+    ];
+    let textParts = '';
+    for (const field of textFields) {
+      textParts += `--${boundary}\r\nContent-Disposition: form-data; name="${field.name}"\r\n\r\n${field.value}\r\n`;
+    }
+    const fileHeader = `--${boundary}\r\nContent-Disposition: form-data; name="attached_file"; filename="${fileName}"\r\nContent-Type: text/markdown\r\n\r\n`;
+    const textBuffer = Buffer.from(textParts, 'utf-8');
+    const fileHeaderBuffer = Buffer.from(fileHeader, 'utf-8');
+    const endBuffer = Buffer.from(`\r\n--${boundary}--\r\n`, 'utf-8');
+    const totalLength = textBuffer.length + fileHeaderBuffer.length + fileContent.length + endBuffer.length;
+
+    const options = {
+      hostname: url.hostname,
+      port: url.port || (url.protocol === 'https:' ? 443 : 80),
+      path: '/api/v1/attachments',
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${TAIGA_TOKEN}`,
+        'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        'Content-Length': totalLength
+      }
+    };
+    const req = protocol.request(options, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          try { resolve(JSON.parse(data)); } catch { reject(new Error(`Failed to parse Taiga response: ${data}`)); }
+        } else {
+          reject(new Error(`Taiga HTTP ${res.statusCode}: ${data}`));
+        }
+      });
+    });
+    req.on('error', reject);
+    req.write(textBuffer);
+    req.write(fileHeaderBuffer);
+    req.write(fileContent);
+    req.write(endBuffer);
+    req.end();
+  });
+}
+
+// Generate change report from git diff
+function generateChangeReport(sourceBranch, targetBranch, tgNumber) {
+  const originTarget = `origin/${targetBranch}`;
+
+  // Get commit log between target and source
+  let commitLog = '';
+  try {
+    commitLog = execSync(`git log ${originTarget}..${sourceBranch} --oneline --no-merges`, { encoding: 'utf-8' }).trim();
+  } catch {
+    try {
+      commitLog = execSync(`git log ${targetBranch}..${sourceBranch} --oneline --no-merges`, { encoding: 'utf-8' }).trim();
+    } catch {
+      commitLog = '';
+    }
+  }
+
+  // Get diff stat and numstat
+  let diffStat = '';
+  let numstat = '';
+  try {
+    diffStat = execSync(`git diff ${originTarget}..${sourceBranch} --stat`, { encoding: 'utf-8' }).trim();
+    numstat = execSync(`git diff ${originTarget}..${sourceBranch} --numstat`, { encoding: 'utf-8' }).trim();
+  } catch {
+    try {
+      diffStat = execSync(`git diff ${targetBranch}..${sourceBranch} --stat`, { encoding: 'utf-8' }).trim();
+      numstat = execSync(`git diff ${targetBranch}..${sourceBranch} --numstat`, { encoding: 'utf-8' }).trim();
+    } catch {
+      diffStat = '(Unable to generate diff stat)';
+    }
+  }
+
+  // Parse numstat into structured data
+  const fileChanges = numstat ? numstat.split('\n').filter(Boolean).map(line => {
+    const parts = line.split('\t');
+    return { file: parts[2], added: parseInt(parts[0]) || 0, deleted: parseInt(parts[1]) || 0 };
+  }) : [];
+
+  const commitCount = commitLog ? commitLog.split('\n').length : 0;
+  const fileCount = fileChanges.length;
+  const totalAdded = fileChanges.reduce((sum, f) => sum + f.added, 0);
+  const totalDeleted = fileChanges.reduce((sum, f) => sum + f.deleted, 0);
+
+  let report = `# \u4FEE\u6539\u62A5\u544A - ${tgNumber || 'N/A'}\n\n`;
+  report += `## \u6982\u8981\n`;
+  report += `- \u6E90\u5206\u652F: ${sourceBranch}\n`;
+  report += `- \u76EE\u6807\u5206\u652F: ${targetBranch}\n`;
+  report += `- \u63D0\u4EA4\u6570: ${commitCount}\n`;
+  report += `- \u53D8\u66F4\u6587\u4EF6\u6570: ${fileCount}\n`;
+  report += `- \u603B\u884C\u6570\u53D8\u5316: +${totalAdded} / -${totalDeleted}\n\n`;
+
+  report += `## \u63D0\u4EA4\u8BB0\u5F55\n`;
+  if (commitLog) {
+    report += commitLog.split('\n').map(line => `- \`${line}\``).join('\n') + '\n\n';
+  } else {
+    report += '(\u65E0\u63D0\u4EA4\u8BB0\u5F55)\n\n';
+  }
+
+  report += `## \u6587\u4EF6\u53D8\u66F4\u7EDF\u8BA1\n\n`;
+  if (fileChanges.length > 0) {
+    report += '| \u6587\u4EF6 | \u589E\u52A0 | \u5220\u9664 |\n';
+    report += '|------|------|------|\n';
+    for (const f of fileChanges) {
+      report += `| ${f.file} | +${f.added} | -${f.deleted} |\n`;
+    }
+    report += '\n';
+  } else {
+    report += '(\u65E0\u6587\u4EF6\u53D8\u66F4)\n\n';
+  }
+
+  report += `## \u8BE6\u7EC6\u53D8\u66F4\n\n`;
+  report += '```\n' + diffStat + '\n```\n';
+
+  return report;
+}
+
 async function main() {
   const args = process.argv.slice(2);
   let sourceBranch = null;
@@ -381,6 +568,7 @@ async function main() {
   let reviewerOverride = null;
   let withTest = false;
   let testReportPath = null;
+  let uploadTarget = 'taiga';
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--source' && args[i + 1]) {
@@ -399,6 +587,8 @@ async function main() {
       withTest = true;
     } else if (args[i] === '--test-report' && args[i + 1]) {
       testReportPath = args[i + 1]; i++;
+    } else if (args[i] === '--upload-target' && args[i + 1]) {
+      uploadTarget = args[i + 1]; i++;
     }
   }
 
@@ -475,17 +665,70 @@ async function main() {
     // 创建 MR
     let finalDescription = description;
     let testReportUrl = null;
+    let changeReportUrl = null;
 
-    // 如果指定了 --with-test 且有测试报告文件，先上传再创建 MR
-    if (withTest && testReportPath) {
-      if (!fs.existsSync(testReportPath)) {
-        throw new Error(`Test report file not found: ${testReportPath}`);
+    // --with-test: upload test report and/or change report
+    if (withTest) {
+      // Prepare Taiga connection if needed
+      let taigaProjectId, taigaObjectId, objectType, taigaSlug, taigaBase, refNum;
+      if (uploadTarget === 'taiga') {
+        if (!TAIGA_URL || !TAIGA_TOKEN) {
+          throw new Error('Taiga upload requires TAIGA_URL and TAIGA_TOKEN environment variables');
+        }
+        if (!tgNumber) {
+          throw new Error('Cannot upload to Taiga: TG number not found in branch name');
+        }
+        taigaSlug = TAIGA_PROJECT_SLUG || 'tecq-agp';
+        taigaProjectId = await getTaigaProjectId(taigaSlug);
+        const isBugOrRefactor = changeType === 'Bug Fix' || changeType === 'Refactoring';
+        objectType = isBugOrRefactor ? 'issue' : 'task';
+        refNum = parseInt(tgNumber.replace('TG-', ''), 10);
+        taigaObjectId = await getTaigaObjectId(taigaProjectId, refNum, objectType);
+        if (!taigaObjectId) {
+          throw new Error(`Taiga ${objectType} not found for ref ${refNum} in project ${taigaSlug}`);
+        }
+        taigaBase = TAIGA_URL;
       }
-      // 先上传测试报告
-      const uploadResult = await uploadFile(projectPath, testReportPath);
-      testReportUrl = uploadResult.markdown;
-      // 在 description 中追加测试报告链接
-      finalDescription = description + '\n\n## Test Report\n' + testReportUrl;
+
+      // Upload test report if provided
+      if (testReportPath) {
+        if (!fs.existsSync(testReportPath)) {
+          throw new Error(`Test report file not found: ${testReportPath}`);
+        }
+        if (uploadTarget === 'taiga') {
+          const taigaResult = await uploadToTaiga(taigaProjectId, taigaObjectId, objectType, testReportPath);
+          testReportUrl = `[Test Report](${taigaResult.attached_file})`;
+        } else {
+          const uploadResult = await uploadFile(projectPath, testReportPath);
+          testReportUrl = uploadResult.markdown;
+        }
+      }
+
+      // Generate change report and upload to Taiga
+      if (uploadTarget === 'taiga' && tgNumber) {
+        const changeReport = generateChangeReport(sourceBranch, targetBranch, tgNumber);
+        const reportDir = testReportPath ? path.dirname(testReportPath) : process.cwd();
+        const changeReportPath = path.join(reportDir, `${tgNumber}-change.md`);
+        fs.writeFileSync(changeReportPath, changeReport, 'utf-8');
+        const changeResult = await uploadToTaiga(taigaProjectId, taigaObjectId, objectType, changeReportPath);
+        changeReportUrl = `[Change Report](${changeResult.attached_file})`;
+      }
+
+      // Build description
+      if (uploadTarget === 'taiga') {
+        let reportSection = '';
+        if (testReportUrl) {
+          reportSection += `\n\n## Test Report\nTest report uploaded to [${tgNumber}](${taigaBase}/project/${taigaSlug}/${objectType}/${refNum})\n\n${testReportUrl}`;
+        }
+        if (changeReportUrl) {
+          reportSection += `\n\n## Change Report\n${changeReportUrl}`;
+        }
+        finalDescription = description + reportSection;
+      } else {
+        const uploadResult = await uploadFile(projectPath, testReportPath);
+        testReportUrl = uploadResult.markdown;
+        finalDescription = description + '\n\n## Test Report\n' + testReportUrl;
+      }
     }
 
     const result = await createMR(projectPath, sourceBranch, targetBranch, title, finalDescription, assigneeId, reviewerIds);
@@ -502,11 +745,19 @@ async function main() {
       }
     };
 
-    if (testReportUrl) {
+    if (testReportUrl || changeReportUrl) {
       output.test_report = {
-        uploaded: true,
-        markdown: testReportUrl
+        uploaded: !!testReportUrl,
+        markdown: testReportUrl || null,
+        target: uploadTarget
       };
+      if (changeReportUrl) {
+        output.change_report = {
+          uploaded: true,
+          markdown: changeReportUrl,
+          target: uploadTarget
+        };
+      }
     }
 
     console.log(JSON.stringify(output, null, 2));

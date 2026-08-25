@@ -1,8 +1,10 @@
 ---
 name: gitlab-create-mr
-description: GitLab Merge Request 自动创建工具。当用户说 "创建 MR"、"create MR"、"新建 merge request"、"push mr" 或类似触发词时，自动识别当前项目的远程仓库，根据分支名称推断目标分支并创建 MR。支持路径规则分支命名（如 hangxuan/console_TG-8201/SZ_dev 合并到 SZ_dev），根据 commit message 前缀自动勾选 MR 类型（fix→Bug Fix, feat→Feature）。支持 --with-test 参数，在创建 MR 前生成测试分析报告并上传到 GitLab。
+description: GitLab Merge Request 自动创建工具。当用户说 "创建 MR"、"create MR"、"新建 merge request"、"push mr" 或类似触发词时，自动识别当前项目的远程仓库，根据分支名称推断目标分支并创建 MR。支持路径规则分支命名（如 hangxuan/console_TG-8201/SZ_dev 合并到 SZ_dev），根据 commit message 前缀自动勾选 MR 类型（fix→Bug Fix, feat→Feature）。支持 --with-test 参数，默认上传测试报告到 Taiga，同时自动生成修改报告（基于 git diff）并上传到 Taiga。可通过 --upload-target gitlab 切换回 GitLab 上传。
 
-**重要**: 创建 MR 时不要添加 labels，不要在 description 中包含文件修改行数统计。
+**重要**：创建 MR 时不要添加 labels，不要在 description 中包含文件修改行数统计。
+
+**前置假设**：运行本 skill 时，用户已完成 commit 并 push 到远程。不要检查、分析或提示本地未提交（uncommitted/unstaged）的代码，直接基于已推送的分支创建 MR。
 ---
 
 # GitLab Create MR
@@ -25,6 +27,11 @@ export GITLAB_TOKEN="<your-gitlab-token>"
 
 # 可选：指定默认 Reviewer（默认: Huiming）
 # export GITLAB_REVIEWER="Huiming"
+
+# 可选：Taiga 配置（--upload-target taiga 时必需）
+# export TAIGA_URL="<your-taiga-url>"
+# export TAIGA_TOKEN="<your-taiga-token>"
+# export TAIGA_PROJECT_SLUG="tecq-agp"  # 默认: tecq-agp
 ```
 
 ## 分支命名规则
@@ -109,14 +116,21 @@ node "<通过 Glob 找到的实际路径>" --with-test
 ```
 
 使用 `--with-test` 时，脚本会：
-1. 在创建 MR 前，上传 `--test-report` 指定的测试报告到 GitLab
+1. 上传 `--test-report` 指定的测试报告到 Taiga（默认）或 GitLab
 2. 将测试报告链接追加到 MR description 的 `## Test Report` 章节
+3. 自动生成修改报告（包含提交记录、文件变更统计、diff 摘要），上传到 Taiga 并追加到 MR description 的 `## Change Report` 章节
 
 ```bash
-# 手动指定测试报告路径
+# 默认上传到 Taiga（自动同时生成修改报告）
 node "<通过 Glob 找到的实际路径>" \
   --with-test \
   --test-report "D:\Workspace\kaizen\test-case\projectName\TG-1234.md"
+
+# 切换回 GitLab 上传（不生成修改报告）
+node "<通过 Glob 找到的实际路径>" \
+  --with-test \
+  --test-report "D:\Workspace\kaizen\test-case\projectName\TG-1234.md" \
+  --upload-target gitlab
 ```
 
 ## 带 --with-test 的完整工作流
@@ -158,8 +172,9 @@ node "<path>/create_mr.cjs" --with-test --test-report "D:\Workspace\kaizen\test-
 ```
 
 脚本会自动：
-1. 上传测试报告到 GitLab
-2. 将报告链接追加到 MR description
+1. 上传测试报告到 Taiga（默认）
+2. 自动生成修改报告（git diff）并上传到 Taiga
+3. 将两个报告链接追加到 MR description
 3. 创建 MR
 
 ## MR Description 模板
@@ -207,7 +222,6 @@ Fixes [TG-XXX](https://taiga.ecquaria.org/project/tecq-agp/issue/XXX)
 
 ## 执行流程
 
-1. 确保在 git 仓库目录中
-2. 确保已推送到远程（或本地有提交）
-3. 运行脚本
-4. 获取创建的 MR URL
+1. 确保在 git 仓库目录中（代码已 commit 并 push，无需检查本地未提交代码）
+2. 运行脚本
+3. 获取创建的 MR URL
