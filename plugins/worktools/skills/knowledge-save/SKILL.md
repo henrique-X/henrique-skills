@@ -5,21 +5,21 @@ description: Extract knowledge from current session and save to structured knowl
 
 # Knowledge Save
 
-Extract knowledge from current conversation and save to a structured Markdown knowledge base.
+Extract knowledge from current conversation and save to Markdown knowledge bases.
 
-## Knowledge Base Location
+## Knowledge Base Locations
 
-All knowledge files are stored in: `D:\Typora\workspace\work\reference\`
+Two target locations, chosen by content type:
+
+- **Project-specific**: `D:\Workspace\workLog\{project-name}.md` (e.g., `my-marketplace.md`)
+- **Topic-general**: `E:\WorkSpace\ai\knowledge\01_raw\inbox\{topic-name}.md` (e.g., `react-patterns.md`, `lowcode.md`)
 
 ## Workflow
 
 ```
 1. Analyze conversation → Extract knowledge points
-2. Determine category → Project / Topic / Quick Reference
-3. Read existing file → Check for duplicates or updates
-4. Smart merge → Dedupe, update outdated info, append new content
-5. Update index → Refresh INDEX.md
-6. Report → Summary of added/updated content
+2. Determine category → Project-specific / Topic-general
+3. Save → Append entries to target file
 ```
 
 ## Execution Steps
@@ -40,20 +40,12 @@ Scan the current session and identify extractable knowledge:
 
 Choose the appropriate file based on content:
 
-- **Project-specific**: `projects/{project-name}.md` (e.g., `tecq-fe-materials.md`)
-- **Topic-general**: `topics/{topic-name}.md` (e.g., `react-patterns.md`, `lowcode.md`)
-- **Quick reference**: `quick-ref/{type}.md` (e.g., `commands.md`, `apis.md`)
+- **Project-specific**: knowledge tied to a concrete project's code, files, or setup → `D:\Workspace\workLog\{project-name}.md`
+- **Topic-general**: reusable knowledge independent of any single project → `E:\WorkSpace\ai\knowledge\01_raw\inbox\{topic-name}.md`
 
 If unsure, ask the user which category fits best.
 
-### Step 3: Read Existing Content
-
-Before writing, read the target file to:
-- Check if similar knowledge already exists
-- Identify outdated information to update
-- Find the right section to append
-
-### Step 4: Format Knowledge Entry
+### Step 3: Format Knowledge Entry
 
 Use this template for each knowledge point:
 
@@ -87,22 +79,13 @@ Use this template for each knowledge point:
 ---
 ```
 
-### Step 5: Smart Merge Strategy
+### Step 4: Save to Target File
 
-When merging with existing content:
+Append entries to the target file:
 
-1. **Exact duplicate** → Skip, do not add
-2. **Similar but outdated** → Update the existing entry, refresh `更新时间`
-3. **New content** → Append to appropriate section
-4. **Contradictory info** → Keep both with notes, or ask user
-
-### Step 6: Update Index
-
-After modifying any file, update `INDEX.md`:
-
-1. Update "最近更新" section with new entry
-2. Update tag counts if new tags added
-3. Update project list if new project file created
+1. If the file exists, read it first — skip exact duplicates, update outdated entries (refresh `更新时间`)
+2. If the file does not exist, create it with a top-level `# {name}` heading
+3. Report a summary of added/updated entries
 
 ## Tags Reference
 
@@ -127,16 +110,14 @@ Common tags for categorization:
 
 **Response**:
 1. Analyze current conversation
-2. Identify 2 knowledge points about Input component binding issues
-3. Determine target: `projects/tecq-fe-materials.md`
-4. Read existing file
-5. Merge new entries
-6. Update INDEX.md
-7. Report: "Added 2 entries to tecq-fe-materials.md: Input value binding, Textarea onChange"
+2. Identify 2 knowledge points about Input component binding issues in project `tecq-fe-materials`
+3. Determine target: `D:\Workspace\workLog\tecq-fe-materials.md`
+4. Append 2 entries using the template
+5. Report: "Added 2 entries to tecq-fe-materials.md: Input value binding, Textarea onChange"
 
 ## Notes
 
-- Always preserve existing content when merging
+- Always preserve existing content when appending or updating
 - Use user's language (Chinese/English) based on conversation
 - Keep entries concise but complete
 - Include file paths for easy navigation
