@@ -1,10 +1,6 @@
 ---
 name: gitlab-create-mr
-description: GitLab Merge Request 自动创建工具。当用户说 "创建 MR"、"create MR"、"新建 merge request"、"push mr" 或类似触发词时，自动识别当前项目的远程仓库，根据分支名称推断目标分支并创建 MR。支持路径规则分支命名（如 hangxuan/console_TG-8201/SZ_dev 合并到 SZ_dev），根据 commit message 前缀自动勾选 MR 类型（fix→Bug Fix, feat→Feature）。支持 --with-test 参数，默认上传测试报告到 Taiga，同时自动生成修改报告（基于 git diff）并上传到 Taiga。可通过 --upload-target gitlab 切换回 GitLab 上传。
-
-**重要**：创建 MR 时不要添加 labels，不要在 description 中包含文件修改行数统计。
-
-**前置假设**：运行本 skill 时，用户已完成 commit 并 push 到远程。不要检查、分析或提示本地未提交（uncommitted/unstaged）的代码，直接基于已推送的分支创建 MR。
+description: GitLab Merge Request 自动创建工具。当用户说 "创建 MR"、"create MR"、"新建 merge request"、"push mr" 或类似触发词时，自动识别当前项目的远程仓库，根据分支名称推断目标分支并创建 MR。支持路径规则分支命名（如 hangxuan/console_TG-8201/SZ_dev 合并到 SZ_dev），根据 commit message 前缀自动勾选 MR 类型（fix→Bug Fix, feat→Feature）。支持 --with-test 参数，默认上传测试报告到 Taiga，同时自动生成修改报告（基于 git diff）并上传到 Taiga。可通过 --upload-target gitlab 切换回 GitLab 上传。重要：创建 MR 时不要添加 labels，不要在 description 中包含文件修改行数统计。前置假设：运行本 skill 时，用户已完成 commit 并 push 到远程。不要检查、分析或提示本地未提交（uncommitted/unstaged）的代码，直接基于已推送的分支创建 MR。
 ---
 
 # GitLab Create MR
